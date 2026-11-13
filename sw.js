@@ -1,6 +1,6 @@
 /* Offline-Cache für die iPad-Seite: erst Netz (aktueller Stand), sonst Cache — so geht die
    Erfassung auch ohne WLAN im Klassenraum. Daten liegen nicht hier, sondern im localStorage. */
-const CACHE = 'bt-ipad-v1';
+const CACHE = 'bt-ipad-v2';
 const DATEIEN = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(DATEIEN)).then(() => self.skipWaiting()));

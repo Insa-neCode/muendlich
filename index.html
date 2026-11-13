@@ -91,6 +91,13 @@
     border-radius: 10px; z-index: 30; font-size: 15px; display: none; max-width: 90vw; }
   .meldung.zeigen { display: block; }
   .test { background: var(--yellow-50); border: 1px solid var(--yellow); border-radius: 10px; padding: 8px 12px; font-size: 14px; margin-bottom: 12px; }
+  .pw-hg { position: fixed; inset: 0; background: rgba(26,35,50,0.45); z-index: 40; display: grid; place-items: center; padding: 16px; }
+  .pw-box { background: #fff; border-radius: 14px; padding: 18px; width: min(380px, 100%); display: grid; gap: 10px; }
+  .pw-box h2 { margin: 0; font-size: 18px; }
+  .pw-box label { font-size: 15px; display: flex; gap: 8px; align-items: center; }
+  .pw-fehler { color: var(--red); margin: 0; font-weight: 600; }
+  .pw-hinweis { font-size: 13px; color: var(--text-2); margin: 0; }
+  .pw-knoepfe { display: flex; gap: 8px; justify-content: flex-end; }
   @media (max-width: 600px) { .karten { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
@@ -117,6 +124,9 @@
       <button class="btn primary" id="export-knopf">Einträge exportieren</button>
       <span id="export-info" style="font-size:14px; color:var(--text-2); align-self:center;"></span>
     </div>
+    <h3>🔒 Verschlüsselung</h3>
+    <p>Klassenliste und Export sind mit deinem Passwort verschlüsselt (AES-256), dasselbe wie am PC. <span id="pw-status"></span></p>
+    <div class="reihe"><button class="btn" id="pw-vergessen">Gemerktes Passwort vergessen</button></div>
     <h3>Aufräumen</h3>
     <p>Alte Einträge vom iPad löschen, wenn sie schon am PC sind.</p>
     <div class="reihe">
@@ -153,6 +163,87 @@
 
 <script>
 'use strict';
+/* ---------- Verschlüsselter Austausch (v0.32) — gleiche Funktionen auf PC und iPad ----------
+   AES-256-GCM, Schlüssel aus dem Passwort per PBKDF2-SHA256 (310.000 Runden, zufälliges Salz je Datei).
+   Ohne Passwort ist der Inhalt nicht lesbar; ein falsches Passwort fällt beim Entschlüsseln auf. */
+const VERSCHL_FORMAT = 'bewertungstool-verschluesselt';
+const VERSCHL_RUNDEN = 310000;
+function krB64(buf) {
+  const a = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function krUnB64(t) {
+  const s = atob(t); const a = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i);
+  return a;
+}
+function kryptoVerfuegbar() { return !!(window.isSecureContext && window.crypto && crypto.subtle); }
+async function krSchluessel(pw, salt, runden) {
+  const basis = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: runden, hash: 'SHA-256' }, basis,
+    { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function verschluesseln(obj, pw, inhalt) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const k = await krSchluessel(pw, salt, VERSCHL_RUNDEN);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, new TextEncoder().encode(JSON.stringify(obj)));
+  return { format: VERSCHL_FORMAT, version: 1, inhalt, verfahren: 'AES-256-GCM / PBKDF2-SHA256',
+    runden: VERSCHL_RUNDEN, salt: krB64(salt), iv: krB64(iv), daten: krB64(ct) };
+}
+async function entschluesseln(env, pw) {
+  const k = await krSchluessel(pw, krUnB64(env.salt), Number(env.runden) || VERSCHL_RUNDEN);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: krUnB64(env.iv) }, k, krUnB64(env.daten));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+function istVerschluesselt(d) { return !!d && d.format === VERSCHL_FORMAT && d.daten && d.salt && d.iv; }
+
+const PW_SPEICHER = 'bt-ipad.passwort';
+function gemerktesPasswort() { try { return localStorage.getItem(PW_SPEICHER) || ''; } catch { return ''; } }
+function merkePasswort(pw) { try { if (pw) localStorage.setItem(PW_SPEICHER, pw); else localStorage.removeItem(PW_SPEICHER); } catch {} }
+/* Kleiner Passwort-Dialog (Promise<string|null>) */
+function passwortDialog({ titel = 'Passwort', fehler = '', neu = false } = {}) {
+  return new Promise((resolve) => {
+    const hg = document.createElement('div');
+    hg.className = 'pw-hg';
+    hg.innerHTML = `<form class="pw-box">
+      <h2>${esc(titel)}</h2>
+      ${fehler ? `<p class="pw-fehler">${esc(fehler)}</p>` : ''}
+      <input type="password" name="pw" placeholder="Passwort" autocomplete="off" required>
+      ${neu ? '<input type="password" name="pw2" placeholder="Passwort wiederholen" autocomplete="off" required>' : ''}
+      <label><input type="checkbox" name="merken" checked> auf diesem iPad merken</label>
+      <p class="pw-hinweis">Dasselbe Passwort wie am PC. Ohne Passwort lässt sich die Datei nicht öffnen.</p>
+      <div class="pw-knoepfe"><button type="button" class="btn" data-x>Abbrechen</button><button class="btn primary">OK</button></div>
+    </form>`;
+    document.body.appendChild(hg);
+    const f = hg.querySelector('form');
+    const ende = (w) => { hg.remove(); resolve(w); };
+    hg.querySelector('[data-x]').addEventListener('click', () => ende(null));
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const pw = f.pw.value;
+      if (neu && pw.length < 8) { alert('Bitte mindestens 8 Zeichen.'); return; }
+      if (neu && pw !== f.pw2.value) { alert('Die beiden Passwörter stimmen nicht überein.'); return; }
+      merkePasswort(f.merken.checked ? pw : '');
+      ende(pw);
+    });
+    setTimeout(() => f.pw.focus(), 30);
+  });
+}
+async function entschluesselnMitDialog(env) {
+  const gemerkt = gemerktesPasswort();
+  if (gemerkt) { try { return await entschluesseln(env, gemerkt); } catch {} }
+  let fehler = gemerkt ? 'Das gemerkte Passwort passt nicht zu dieser Datei.' : '';
+  for (let i = 0; i < 3; i++) {
+    const pw = await passwortDialog({ titel: 'Datei entschlüsseln', fehler });
+    if (pw == null) return null;
+    try { return await entschluesseln(env, pw); } catch { fehler = 'Falsches Passwort — bitte noch einmal.'; merkePasswort(gemerkt); }
+  }
+  alert('Die Datei ließ sich nicht entschlüsseln.');
+  return null;
+}
+
 const SPEICHER = 'bt-ipad.v1';
 const LISTE_FORMAT = 'bewertungstool-ipad-liste';
 const EXPORT_FORMAT = 'bewertungstool-ipad-muendlich';
@@ -207,6 +298,7 @@ function zeichne() {
   const lg = aktiveListe();
   $('listen-info').textContent = ids.length ? `${ids.length} Lerngruppe(n), eingelesen ${new Date(daten.eingelesen || Date.now()).toLocaleDateString('de-DE')}` : 'noch keine Liste';
   $('export-info').textContent = `${daten.eintraege.length} Einträge auf diesem iPad`;
+  $('pw-status').textContent = gemerktesPasswort() ? 'Passwort ist auf diesem iPad gemerkt.' : 'Kein Passwort gemerkt — es wird beim Einlesen/Exportieren abgefragt.';
   if (!lg) {
     $('zaehler').textContent = '';
     $('karten').innerHTML = `<div class="leer" style="grid-column:1/-1;">Noch keine Klassenliste auf diesem iPad.<br>
@@ -264,9 +356,14 @@ function setze(typ, wert) {
 }
 
 /* ---------- Klassenliste einlesen ---------- */
-function liesListe(text) {
+async function liesListe(text) {
   let d;
   try { d = JSON.parse(text); } catch { alert('Die Datei ist keine gültige Klassenliste.'); return; }
+  if (istVerschluesselt(d)) {
+    if (!kryptoVerfuegbar()) { alert('Entschlüsseln geht nur über die sichere Adresse (https).'); return; }
+    d = await entschluesselnMitDialog(d);
+    if (!d) return;
+  }
   if (!d || d.format !== LISTE_FORMAT || !Array.isArray(d.lerngruppen)) { alert('Das ist keine Klassenliste aus dem Bewertungstool (falsches Format).'); return; }
   daten.listen = {};
   daten.reihenfolge = [];
@@ -289,7 +386,10 @@ async function exportiere() {
     eintraege: daten.eintraege.map(({ id, lgId, sId, datum, typ, wert, notiz, geaendert }) => ({ id, lgId, sId, datum, typ, wert, notiz, geaendert })) };
   const zeit = new Date();
   const name = 'bewertungstool' + '-ipad-muendlich-' + heute() + '-' + String(zeit.getHours()).padStart(2, '0') + String(zeit.getMinutes()).padStart(2, '0') + '.json';
-  const blob = new Blob([JSON.stringify(inhalt, null, 1)], { type: 'application/json' });
+  if (!kryptoVerfuegbar()) { alert('Verschlüsseln geht nur über die sichere Adresse (https).'); return; }
+  const pw = gemerktesPasswort() || await passwortDialog({ titel: 'Einträge verschlüsseln', neu: true });
+  if (!pw) return;
+  const blob = new Blob([JSON.stringify(await verschluesseln(inhalt, pw, 'ipad-muendlich'))], { type: 'application/json' });
   const datei = new File([blob], name, { type: 'application/json' });
   try {
     if (navigator.canShare && navigator.canShare({ files: [datei] })) {
@@ -355,6 +455,7 @@ $('liste-datei').addEventListener('change', e => {
   f.text().then(liesListe); e.target.value = '';
 });
 $('export-knopf').addEventListener('click', exportiere);
+$('pw-vergessen').addEventListener('click', () => { merkePasswort(''); zeichne(); meldung('Passwort vergessen.'); });
 $('aufraeumen-knopf').addEventListener('click', () => {
   const grenze = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
   const alt = daten.eintraege.filter(e => e.datum < grenze).length;
@@ -364,15 +465,6 @@ $('aufraeumen-knopf').addEventListener('click', () => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && offenSid) schliesse(); });
 
-/* Test-Instanz (Port 8421): Fantasie-Klassenliste zum Ausprobieren */
-if (location.port === '8421') {
-  $('test-hinweis').innerHTML = `<div class="test">🧪 Test-Instanz · nur Fantasie-Daten.
-    <button class="btn" id="testliste">Fantasie-Klassenliste laden</button></div>`;
-  $('testliste').addEventListener('click', () => liesListe(JSON.stringify({ format: LISTE_FORMAT, version: 1, lerngruppen: [
-    { id: 'test-lg-9t', name: 'Mathematik 9t', schueler: ['Anna Apfel', 'Ben Birne', 'Cem Clementine', 'Dana Dattel', 'Emil Erdbeere', 'Fatma Feige', 'Gustav Granatapfel', 'Hanna Holunder'].map((n, i) => ({ id: 'test-s' + i, name: n })) },
-    { id: 'test-lg-7b', name: 'Mathematik 7b', schueler: ['Ida Ingwer', 'Jonas Johannisbeere', 'Kira Kiwi', 'Leo Limette'].map((n, i) => ({ id: 'test-t' + i, name: n })) }
-  ] })));
-}
 
 /* Offline nutzbar (nur über https bzw. localhost) */
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
