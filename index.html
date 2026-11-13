@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mündlich">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#3F73AB">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Mündlich · Bewertungstool</title>
+<!--
+  Mündliche Mitarbeit am iPad (Bewertungstool, Roadmap 37 · v0.30)
+  - Nur Programmcode liegt online; Klassenliste und Einträge bleiben im Speicher dieses iPads.
+  - Ablauf: am PC Klassenliste exportieren → hier einlesen → im Unterricht antippen →
+    „Einträge exportieren" → am PC einlesen (ergänzt nur die mündlichen Einträge, keine Dubletten).
+  - Ein Eintrag je Schüler:in und Tag, Werte wie am PC: 1+ = 0,75 · 1 = 1 · 1- = 1,25 … 6;
+    „keine aktive Beteiligung" (zählt wie 4) und „fehlende Teilnahme" (zählt nicht).
+-->
+<style>
+  :root {
+    --bg: #F4F6F9; --surface: #fff; --surface-alt: #F7F9FC; --border: #DCE3EC; --border-strong: #BDC8D6;
+    --text: #1A2332; --text-2: #4A5568; --text-3: #8896A8;
+    --accent: #3F73AB; --accent-dark: #2C5282; --accent-50: #E8F0F8;
+    --green: #15803D; --green-50: #DCFCE7; --red: #B91C1C; --red-50: #FEE2E2; --yellow: #A16207; --yellow-50: #FEF9C3;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-size: 16px; }
+  body { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  header { position: sticky; top: 0; z-index: 5; background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 16px; }
+  header h1 { font-size: 18px; margin: 0 auto 0 0; }
+  .btn.gross { padding: 10px 18px; font-size: 17px; }
+  .reiter { flex-basis: 100%; display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 2px; -webkit-overflow-scrolling: touch; }
+  .reiter button { flex: none; padding: 9px 14px; border-radius: 999px; border: 1px solid var(--border-strong); background: #fff; font-size: 15px; font-weight: 500; }
+  .reiter button.aktiv { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .reiter small { font-weight: 400; opacity: 0.8; margin-left: 4px; }
+  .fortschritt { font-size: 14px; color: var(--text-2); }
+  .fortschritt-balken { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin: 0 0 10px; }
+  .fortschritt-balken span { display: block; height: 100%; background: var(--green); }
+  .bogen-kopf h2 small { display: block; font-size: 13px; font-weight: 400; color: var(--text-2); }
+  select, input[type=date], input[type=text], textarea {
+    font: inherit; font-size: 16px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: #fff; color: var(--text); }
+  button { font: inherit; cursor: pointer; }
+  .btn { padding: 9px 14px; border-radius: 8px; border: 1px solid var(--border-strong); background: #fff; color: var(--text); font-weight: 500; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--text-2); }
+  .btn.danger { color: var(--red); }
+  main { padding: 14px 16px 120px; max-width: 1100px; margin: 0 auto; }
+  .info { font-size: 14px; color: var(--text-2); margin: 4px 0 12px; }
+  .karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .kachel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 12px; text-align: left;
+    min-height: 78px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
+  .kachel.erfasst { border-color: var(--green); background: #F3FBF5; }
+  .kachel.aktiv { outline: 3px solid var(--accent); }
+  .kachel .name { font-weight: 600; font-size: 16px; line-height: 1.2; }
+  .kachel .wert { font-size: 13px; color: var(--text-2); }
+  .kachel.erfasst .wert { color: var(--green); font-weight: 600; }
+  .leer { text-align: center; padding: 40px 16px; color: var(--text-2); }
+  .leer .btn { margin-top: 12px; }
+  /* Eingabe-Bogen unten */
+  .bogen-hg { position: fixed; inset: 0; background: rgba(26,35,50,0.35); z-index: 20; display: none; }
+  .bogen { position: fixed; left: 0; right: 0; bottom: 0; z-index: 21; background: var(--surface); border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 30px rgba(26,35,50,0.2); padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); display: none;
+    max-width: 760px; margin: 0 auto; }
+  .bogen.offen, .bogen-hg.offen { display: block; }
+  .bogen-kopf { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .bogen-kopf h2 { margin: 0 auto 0 0; font-size: 20px; }
+  .noten { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .nb { padding: 14px 0; font-size: 20px; font-weight: 700; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-alt); }
+  .nb.n1 { background: #DCFCE7; color: #15803D; } .nb.n2 { background: #ECFCCB; color: #4D7C0F; }
+  .nb.n3 { background: #FEF9C3; color: #A16207; } .nb.n4 { background: #FED7AA; color: #C2410C; }
+  .nb.n5 { background: #FECACA; color: #B91C1C; } .nb.n6 { background: #7F1D1D; color: #fff; }
+  .nb.gewaehlt { outline: 3px solid var(--text); outline-offset: 1px; }
+  .sonder { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .sonder .btn { padding: 14px; font-size: 16px; }
+  .sonder .btn.gewaehlt { outline: 3px solid var(--text); }
+  .bogen textarea { width: 100%; margin-top: 10px; min-height: 44px; }
+  .bogen-fuss { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 14px; color: var(--text-2); }
+  .bogen-fuss label { display: flex; gap: 6px; align-items: center; margin-right: auto; }
+  /* Menü */
+  .menue { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin: 0 0 14px; display: none; }
+  .menue.offen { display: block; }
+  .menue h3 { margin: 0 0 6px; font-size: 15px; }
+  .menue p { margin: 4px 0 10px; font-size: 14px; color: var(--text-2); }
+  .menue .reihe { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .meldung { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--text); color: #fff; padding: 10px 16px;
+    border-radius: 10px; z-index: 30; font-size: 15px; display: none; max-width: 90vw; }
+  .meldung.zeigen { display: block; }
+  .test { background: var(--yellow-50); border: 1px solid var(--yellow); border-radius: 10px; padding: 8px 12px; font-size: 14px; margin-bottom: 12px; }
+  @media (max-width: 600px) { .karten { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🗣️ Mündlich</h1>
+  <input type="date" id="datum" aria-label="Datum">
+  <button class="btn primary gross" id="schnell-knopf">▶ Schnellerfassung</button>
+  <button class="btn" id="menue-knopf" aria-expanded="false">☰ Daten</button>
+  <nav class="reiter" id="reiter" aria-label="Lerngruppen"></nav>
+</header>
+<main>
+  <div id="test-hinweis"></div>
+  <section class="menue" id="menue">
+    <h3>1 · Klassenliste einlesen</h3>
+    <p>Am PC: Bewertungstool → Einstellungen &amp; Daten → „📱 Klassenliste fürs iPad exportieren". Die Datei z. B. über OneDrive/Teams aufs iPad holen und hier auswählen. Eine neue Liste ersetzt die alte, erfasste Einträge bleiben.</p>
+    <div class="reihe">
+      <label class="btn primary">Klassenliste wählen …<input type="file" id="liste-datei" accept=".json,application/json" hidden></label>
+      <span id="listen-info" style="font-size:14px; color:var(--text-2); align-self:center;"></span>
+    </div>
+    <h3>2 · Einträge zum PC bringen</h3>
+    <p>Exportiert alle Einträge auf diesem iPad (doppelte erkennt der PC selbst). Am PC: Einstellungen &amp; Daten → „📱 iPad-Einträge einlesen".</p>
+    <div class="reihe">
+      <button class="btn primary" id="export-knopf">Einträge exportieren</button>
+      <span id="export-info" style="font-size:14px; color:var(--text-2); align-self:center;"></span>
+    </div>
+    <h3>Aufräumen</h3>
+    <p>Alte Einträge vom iPad löschen, wenn sie schon am PC sind.</p>
+    <div class="reihe">
+      <button class="btn danger" id="aufraeumen-knopf">Einträge älter als 60 Tage löschen</button>
+    </div>
+    <p style="font-size:13px;">Datenschutz: Namen und Einträge liegen nur im Speicher dieses iPads, nichts wird ins Internet übertragen. Bitte die App als Symbol auf dem Home-Bildschirm nutzen (Teilen → „Zum Home-Bildschirm") — dann löscht Safari die Daten nicht nach längerer Pause. Trotzdem regelmäßig exportieren.</p>
+  </section>
+  <div class="info" id="zaehler"></div>
+  <div class="karten" id="karten"></div>
+</main>
+
+<div class="bogen-hg" id="bogen-hg"></div>
+<section class="bogen" id="bogen" role="dialog" aria-modal="true" aria-labelledby="bogen-name">
+  <div class="bogen-kopf">
+    <h2 id="bogen-name"></h2>
+    <button class="btn ghost" id="bogen-zurueck" aria-label="vorherige Schüler:in">‹</button>
+    <button class="btn ghost" id="bogen-weiter" aria-label="nächste Schüler:in">›</button>
+    <button class="btn" id="bogen-skip">Überspringen →</button>
+    <button class="btn" id="bogen-zu">Fertig</button>
+  </div>
+  <div class="fortschritt-balken"><span id="bogen-balken"></span></div>
+  <div class="noten" id="noten"></div>
+  <div class="sonder">
+    <button class="btn" data-typ="kein_beitrag">🙈 Keine aktive Beteiligung</button>
+    <button class="btn" data-typ="abwesend">🚫 Fehlende Teilnahme</button>
+  </div>
+  <textarea id="notiz" rows="1" placeholder="Notiz (optional), z. B. „meldet sich kaum“"></textarea>
+  <div class="bogen-fuss">
+    <label><input type="checkbox" id="auto-weiter" checked> nach dem Tippen weiter zur/zum Nächsten ohne Eintrag</label>
+    <button class="btn danger" id="eintrag-loeschen">Eintrag löschen</button>
+  </div>
+</section>
+<div class="meldung" id="meldung"></div>
+
+<script>
+'use strict';
+const SPEICHER = 'bt-ipad.v1';
+const LISTE_FORMAT = 'bewertungstool-ipad-liste';
+const EXPORT_FORMAT = 'bewertungstool-ipad-muendlich';
+const WERTE = [];
+for (const n of [1, 2, 3, 4, 5]) WERTE.push({ w: n - 0.25, t: n + '+', n }, { w: n, t: String(n), n }, { w: n + 0.25, t: n + '-', n });
+WERTE.push({ w: 6, t: '6', n: 6 });
+
+function heute() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function laden() {
+  try {
+    const d = JSON.parse(localStorage.getItem(SPEICHER) || 'null');
+    if (d && typeof d === 'object' && d.listen && Array.isArray(d.eintraege)) return d;
+  } catch {}
+  return { listen: {}, reihenfolge: [], eintraege: [], aktivLg: null };
+}
+let daten = laden();
+function speichern() {
+  try { localStorage.setItem(SPEICHER, JSON.stringify(daten)); }
+  catch (e) { alert('Speichern auf dem iPad fehlgeschlagen: ' + (e.message || e) + '\nBitte jetzt exportieren.'); }
+}
+let datum = heute();
+let offenSid = null;
+const $ = (id) => document.getElementById(id);
+
+function meldung(text) {
+  const m = $('meldung'); m.textContent = text; m.classList.add('zeigen');
+  clearTimeout(meldung.t); meldung.t = setTimeout(() => m.classList.remove('zeigen'), 2200);
+}
+function aktiveListe() { return daten.listen[daten.aktivLg] || null; }
+function eintragVon(sId) { return daten.eintraege.find(e => e.lgId === daten.aktivLg && e.sId === sId && e.datum === datum) || null; }
+function label(e) {
+  if (!e) return '';
+  if (e.typ === 'kein_beitrag') return 'keine aktive Beteiligung';
+  if (e.typ === 'abwesend') return 'fehlt';
+  return (WERTE.find(x => x.w === e.wert)?.t || String(e.wert)) + (e.notiz ? ' · 📝' : '');
+}
+
+function zeichne() {
+  const ids = daten.reihenfolge.filter(id => daten.listen[id]);
+  $('reiter').innerHTML = ids.map(id => {
+    const l = daten.listen[id];
+    const n = l.schueler.filter(s => daten.eintraege.some(e => e.lgId === id && e.sId === s.id && e.datum === datum)).length;
+    return `<button data-lg="${esc(id)}" class="${id === daten.aktivLg ? 'aktiv' : ''}">${esc(l.name)}<small>${n}/${l.schueler.length}</small></button>`;
+  }).join('');
+  $('schnell-knopf').disabled = !aktiveListe();
+  $('datum').value = datum;
+  const lg = aktiveListe();
+  $('listen-info').textContent = ids.length ? `${ids.length} Lerngruppe(n), eingelesen ${new Date(daten.eingelesen || Date.now()).toLocaleDateString('de-DE')}` : 'noch keine Liste';
+  $('export-info').textContent = `${daten.eintraege.length} Einträge auf diesem iPad`;
+  if (!lg) {
+    $('zaehler').textContent = '';
+    $('karten').innerHTML = `<div class="leer" style="grid-column:1/-1;">Noch keine Klassenliste auf diesem iPad.<br>
+      <button class="btn primary" onclick="menue(true)">Klassenliste einlesen</button></div>`;
+    return;
+  }
+  const n = lg.schueler.filter(s => eintragVon(s.id)).length;
+  $('zaehler').textContent = `${lg.name} · ${new Date(datum + 'T12:00').toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' })} · ${n} von ${lg.schueler.length} erfasst`;
+  $('karten').innerHTML = lg.schueler.map(s => {
+    const e = eintragVon(s.id);
+    return `<button class="kachel ${e ? 'erfasst' : ''} ${offenSid === s.id ? 'aktiv' : ''}" data-sid="${esc(s.id)}">
+      <span class="name">${esc(s.name)}</span><span class="wert">${e ? esc(label(e)) : 'antippen'}</span></button>`;
+  }).join('');
+}
+
+function oeffne(sId) {
+  const lg = aktiveListe(); if (!lg) return;
+  const s = lg.schueler.find(x => x.id === sId); if (!s) return;
+  offenSid = sId;
+  const e = eintragVon(sId);
+  const nr = lg.schueler.findIndex(x => x.id === sId) + 1;
+  const erfasst = lg.schueler.filter(x => eintragVon(x.id)).length;
+  $('bogen-name').innerHTML = `${esc(s.name)}<small>${esc(lg.name)} · ${nr} von ${lg.schueler.length} · ${erfasst} erfasst</small>`;
+  $('bogen-balken').style.width = Math.round(erfasst / lg.schueler.length * 100) + '%';
+  $('noten').innerHTML = WERTE.map(x => `<button class="nb n${x.n} ${e && e.typ === 'note' && e.wert === x.w ? 'gewaehlt' : ''}" data-wert="${x.w}"${x.n === 6 ? ' style="grid-column:2;"' : ''}>${x.t}</button>`).join('');
+  document.querySelectorAll('.sonder [data-typ]').forEach(b => b.classList.toggle('gewaehlt', !!e && e.typ === b.dataset.typ));
+  $('notiz').value = e?.notiz || '';
+  $('eintrag-loeschen').style.visibility = e ? 'visible' : 'hidden';
+  $('bogen').classList.add('offen'); $('bogen-hg').classList.add('offen');
+  zeichne();
+}
+function schliesse() { offenSid = null; $('bogen').classList.remove('offen'); $('bogen-hg').classList.remove('offen'); zeichne(); }
+function nachbar(richtung, nurOhne) {
+  const lg = aktiveListe(); if (!lg) return null;
+  const i = lg.schueler.findIndex(s => s.id === offenSid);
+  for (let k = 1; k <= lg.schueler.length; k++) {
+    const s = lg.schueler[(i + richtung * k + lg.schueler.length * 2) % lg.schueler.length];
+    if (!nurOhne || !eintragVon(s.id)) return s.id;
+  }
+  return null;
+}
+function setze(typ, wert) {
+  if (!offenSid) return;
+  const notiz = $('notiz').value.trim();
+  let e = eintragVon(offenSid);
+  if (!e) { e = { id: uid(), lgId: daten.aktivLg, sId: offenSid, datum }; daten.eintraege.push(e); }
+  Object.assign(e, { typ, wert: typ === 'note' ? wert : null, notiz, geaendert: new Date().toISOString() });
+  speichern();
+  if ($('auto-weiter').checked) {
+    const naechste = nachbar(1, true);
+    if (naechste && naechste !== offenSid) { oeffne(naechste); return; }
+    meldung('Alle haben für heute einen Eintrag ✓'); schliesse(); return;
+  }
+  oeffne(offenSid);
+}
+
+/* ---------- Klassenliste einlesen ---------- */
+function liesListe(text) {
+  let d;
+  try { d = JSON.parse(text); } catch { alert('Die Datei ist keine gültige Klassenliste.'); return; }
+  if (!d || d.format !== LISTE_FORMAT || !Array.isArray(d.lerngruppen)) { alert('Das ist keine Klassenliste aus dem Bewertungstool (falsches Format).'); return; }
+  daten.listen = {};
+  daten.reihenfolge = [];
+  for (const lg of d.lerngruppen) {
+    if (!lg || !lg.id || !Array.isArray(lg.schueler)) continue;
+    daten.listen[lg.id] = { id: lg.id, name: String(lg.name || 'Lerngruppe'), schueler: lg.schueler.filter(s => s && s.id).map(s => ({ id: String(s.id), name: String(s.name || '') })) };
+    daten.reihenfolge.push(lg.id);
+  }
+  daten.eingelesen = new Date().toISOString();
+  if (!daten.listen[daten.aktivLg]) daten.aktivLg = daten.reihenfolge[0] || null;
+  speichern(); zeichne();
+  meldung(`${daten.reihenfolge.length} Lerngruppe(n) eingelesen`);
+  menue(false);
+}
+
+/* ---------- Export ---------- */
+async function exportiere() {
+  if (!daten.eintraege.length) { alert('Noch keine Einträge auf diesem iPad.'); return; }
+  const inhalt = { format: EXPORT_FORMAT, version: 1, erstellt: new Date().toISOString(),
+    eintraege: daten.eintraege.map(({ id, lgId, sId, datum, typ, wert, notiz, geaendert }) => ({ id, lgId, sId, datum, typ, wert, notiz, geaendert })) };
+  const zeit = new Date();
+  const name = 'bewertungstool' + '-ipad-muendlich-' + heute() + '-' + String(zeit.getHours()).padStart(2, '0') + String(zeit.getMinutes()).padStart(2, '0') + '.json';
+  const blob = new Blob([JSON.stringify(inhalt, null, 1)], { type: 'application/json' });
+  const datei = new File([blob], name, { type: 'application/json' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [datei] })) {
+      await navigator.share({ files: [datei], title: 'Mündliche Einträge' });
+      daten.letzterExport = new Date().toISOString(); speichern(); zeichne();
+      return;
+    }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  daten.letzterExport = new Date().toISOString(); speichern(); zeichne();
+}
+
+/* Schnellerfassung: Schüler:in für Schüler:in, beginnend bei der/dem Ersten ohne Eintrag am gewählten Tag */
+function schnellerfassung() {
+  const lg = aktiveListe(); if (!lg) { menue(true); return; }
+  $('auto-weiter').checked = true;
+  const offen = lg.schueler.find(s => !eintragVon(s.id));
+  if (offen) { oeffne(offen.id); return; }
+  if (confirm('Alle haben für diesen Tag schon einen Eintrag. Von vorne durchgehen (Einträge ändern)?')) oeffne(lg.schueler[0].id);
+}
+
+function menue(offen) {
+  const m = $('menue');
+  const an = offen ?? !m.classList.contains('offen');
+  m.classList.toggle('offen', an);
+  $('menue-knopf').setAttribute('aria-expanded', String(an));
+}
+
+/* ---------- Ereignisse ---------- */
+$('karten').addEventListener('click', e => { const k = e.target.closest('.kachel'); if (k) oeffne(k.dataset.sid); });
+$('noten').addEventListener('click', e => { const b = e.target.closest('.nb'); if (b) setze('note', Number(b.dataset.wert)); });
+document.querySelectorAll('.sonder [data-typ]').forEach(b => b.addEventListener('click', () => setze(b.dataset.typ, null)));
+$('notiz').addEventListener('change', () => {
+  const e = offenSid && eintragVon(offenSid);
+  if (e) { e.notiz = $('notiz').value.trim(); e.geaendert = new Date().toISOString(); speichern(); zeichne(); }
+});
+$('bogen-zu').addEventListener('click', () => {
+  const e = offenSid && eintragVon(offenSid);
+  if (e && $('notiz').value.trim() !== (e.notiz || '')) { e.notiz = $('notiz').value.trim(); speichern(); }
+  schliesse();
+});
+$('bogen-hg').addEventListener('click', schliesse);
+$('bogen-weiter').addEventListener('click', () => { const n = nachbar(1, false); if (n) oeffne(n); });
+$('bogen-zurueck').addEventListener('click', () => { const n = nachbar(-1, false); if (n) oeffne(n); });
+$('eintrag-loeschen').addEventListener('click', () => {
+  const e = offenSid && eintragVon(offenSid); if (!e) return;
+  if (!confirm('Eintrag für diesen Tag löschen?')) return;
+  daten.eintraege = daten.eintraege.filter(x => x !== e); speichern(); oeffne(offenSid);
+});
+$('reiter').addEventListener('click', e => { const b = e.target.closest('[data-lg]'); if (!b) return; daten.aktivLg = b.dataset.lg; speichern(); zeichne(); });
+$('schnell-knopf').addEventListener('click', schnellerfassung);
+$('bogen-skip').addEventListener('click', () => {
+  const n = nachbar(1, true);
+  if (n && n !== offenSid) oeffne(n); else { meldung('Keine weiteren Schüler:innen ohne Eintrag.'); schliesse(); }
+});
+$('datum').addEventListener('change', e => { datum = e.target.value || heute(); zeichne(); });
+$('menue-knopf').addEventListener('click', () => menue());
+$('liste-datei').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  f.text().then(liesListe); e.target.value = '';
+});
+$('export-knopf').addEventListener('click', exportiere);
+$('aufraeumen-knopf').addEventListener('click', () => {
+  const grenze = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
+  const alt = daten.eintraege.filter(e => e.datum < grenze).length;
+  if (!alt) { meldung('Keine Einträge älter als 60 Tage.'); return; }
+  if (!confirm(`${alt} Einträge älter als 60 Tage vom iPad löschen?\nNur tun, wenn sie schon am PC eingelesen sind.`)) return;
+  daten.eintraege = daten.eintraege.filter(e => e.datum >= grenze); speichern(); zeichne();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && offenSid) schliesse(); });
+
+/* Test-Instanz (Port 8421): Fantasie-Klassenliste zum Ausprobieren */
+if (location.port === '8421') {
+  $('test-hinweis').innerHTML = `<div class="test">🧪 Test-Instanz · nur Fantasie-Daten.
+    <button class="btn" id="testliste">Fantasie-Klassenliste laden</button></div>`;
+  $('testliste').addEventListener('click', () => liesListe(JSON.stringify({ format: LISTE_FORMAT, version: 1, lerngruppen: [
+    { id: 'test-lg-9t', name: 'Mathematik 9t', schueler: ['Anna Apfel', 'Ben Birne', 'Cem Clementine', 'Dana Dattel', 'Emil Erdbeere', 'Fatma Feige', 'Gustav Granatapfel', 'Hanna Holunder'].map((n, i) => ({ id: 'test-s' + i, name: n })) },
+    { id: 'test-lg-7b', name: 'Mathematik 7b', schueler: ['Ida Ingwer', 'Jonas Johannisbeere', 'Kira Kiwi', 'Leo Limette'].map((n, i) => ({ id: 'test-t' + i, name: n })) }
+  ] })));
+}
+
+/* Offline nutzbar (nur über https bzw. localhost) */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+zeichne();
+</script>
+</body>
+</html>
