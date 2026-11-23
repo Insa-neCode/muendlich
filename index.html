@@ -98,6 +98,32 @@
   .pw-fehler { color: var(--red); margin: 0; font-weight: 600; }
   .pw-hinweis { font-size: 13px; color: var(--text-2); margin: 0; }
   .pw-knoepfe { display: flex; gap: 8px; justify-content: flex-end; }
+  .menue-info { font-size: 14px; color: var(--text-2); align-self: center; }
+  details.technik { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 10px; }
+  details.technik summary { cursor: pointer; color: var(--accent-dark); font-size: 15px; }
+  details.technik p { font-size: 14px; color: var(--text-2); margin: 8px 0; }
+  .ansicht { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+  .ansicht button { border: none; background: #fff; padding: 9px 16px; font-size: 15px; font-weight: 500; }
+  .ansicht button.aktiv { background: var(--accent); color: #fff; }
+  .ueb-kopf { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 14px; color: var(--text-2); margin-bottom: 8px; }
+  .ueb-kopf label { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .ueb { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .ueb th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); padding: 10px; background: var(--surface-alt); }
+  .ueb td { padding: 10px; border-top: 1px solid var(--border); font-size: 15px; vertical-align: top; }
+  .ueb tr.zeile { cursor: pointer; }
+  .ueb tr.zeile.offen td { background: var(--accent-50); }
+  .ueb .klein { font-size: 12px; color: var(--text-2); }
+  .ueb .nt { color: var(--text-3); }
+  .pill { display: inline-block; min-width: 28px; text-align: center; padding: 2px 7px; border-radius: 6px; font-weight: 700; font-size: 14px; margin: 0 2px 2px 0; }
+  .pill.n1 { background: #DCFCE7; color: #15803D; } .pill.n2 { background: #ECFCCB; color: #4D7C0F; }
+  .pill.n3 { background: #FEF9C3; color: #A16207; } .pill.n4 { background: #FED7AA; color: #C2410C; }
+  .pill.n5 { background: #FECACA; color: #B91C1C; } .pill.n6 { background: #7F1D1D; color: #fff; }
+  .pill.leer { background: var(--surface-alt); color: var(--text-3); font-weight: 400; }
+  .detail td { background: var(--surface-alt); }
+  .detail ul { list-style: none; margin: 0; padding: 0; columns: 2; column-gap: 24px; }
+  .detail li { font-size: 14px; padding: 3px 0; break-inside: avoid; }
+  .detail .neu { color: var(--accent-dark); font-weight: 600; font-size: 12px; }
+  @media (max-width: 700px) { .detail ul { columns: 1; } }
   @media (max-width: 600px) { .karten { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
@@ -112,30 +138,34 @@
 <main>
   <div id="test-hinweis"></div>
   <section class="menue" id="menue">
-    <h3>1 · Klassenliste einlesen</h3>
-    <p>Am PC: Bewertungstool → Einstellungen &amp; Daten → „📱 Klassenliste fürs iPad exportieren". Die Datei z. B. über OneDrive/Teams aufs iPad holen und hier auswählen. Eine neue Liste ersetzt die alte, erfasste Einträge bleiben.</p>
     <div class="reihe">
-      <label class="btn primary">Klassenliste wählen …<input type="file" id="liste-datei" accept=".json,application/json" hidden></label>
-      <span id="listen-info" style="font-size:14px; color:var(--text-2); align-self:center;"></span>
+      <label class="btn primary">📥 Klassenliste einlesen …<input type="file" id="liste-datei" accept=".json,application/json" hidden></label>
+      <span id="listen-info" class="menue-info"></span>
     </div>
-    <h3>2 · Einträge zum PC bringen</h3>
-    <p>Exportiert alle Einträge auf diesem iPad (doppelte erkennt der PC selbst). Am PC: Einstellungen &amp; Daten → „📱 iPad-Einträge einlesen".</p>
     <div class="reihe">
-      <button class="btn primary" id="export-knopf">Einträge exportieren</button>
-      <span id="export-info" style="font-size:14px; color:var(--text-2); align-self:center;"></span>
+      <button class="btn primary" id="export-knopf">📤 Einträge exportieren</button>
+      <span id="export-info" class="menue-info"></span>
     </div>
-    <h3>🔒 Verschlüsselung</h3>
-    <p>Klassenliste und Export sind mit deinem Passwort verschlüsselt (AES-256), dasselbe wie am PC. <span id="pw-status"></span></p>
-    <div class="reihe"><button class="btn" id="pw-vergessen">Gemerktes Passwort vergessen</button></div>
-    <h3>Aufräumen</h3>
-    <p>Alte Einträge vom iPad löschen, wenn sie schon am PC sind.</p>
     <div class="reihe">
+      <button class="btn" id="pw-vergessen">Gemerktes Passwort vergessen</button>
       <button class="btn danger" id="aufraeumen-knopf">Einträge älter als 60 Tage löschen</button>
     </div>
-    <p style="font-size:13px;">Datenschutz: Namen und Einträge liegen nur im Speicher dieses iPads, nichts wird ins Internet übertragen. Bitte die App als Symbol auf dem Home-Bildschirm nutzen (Teilen → „Zum Home-Bildschirm") — dann löscht Safari die Daten nicht nach längerer Pause. Trotzdem regelmäßig exportieren.</p>
+    <details class="technik">
+      <summary>ℹ️ So funktioniert's · Technik &amp; Datenschutz</summary>
+      <p><strong>Klassenliste:</strong> Am PC im Bewertungstool → Einstellungen &amp; Daten → „📱 Klassenliste fürs iPad exportieren", Lerngruppen auswählen. Datei über OneDrive/Teams aufs iPad holen und hier einlesen. Eine neue Liste ersetzt die alte, erfasste Einträge bleiben.</p>
+      <p><strong>Zurück zum PC:</strong> „Einträge exportieren" gibt alle Einträge dieses iPads aus — auch über Wochen gesammelt; doppelte erkennt der PC selbst. Am PC: „📱 iPad-Einträge einlesen".</p>
+      <p><strong>🔒 Verschlüsselung:</strong> Klassenliste und Export sind mit deinem Passwort verschlüsselt (AES-256), dasselbe wie am PC. <span id="pw-status"></span></p>
+      <p><strong>Datenschutz:</strong> Namen, Einträge und der mitgegebene Notenstand liegen nur im Speicher dieses iPads; ins Internet geht nichts. Online liegt nur das Programm. Bitte über das Symbol auf dem Home-Bildschirm öffnen (eigener, dauerhafter Speicher) und regelmäßig exportieren.</p>
+      <p><strong>Aufräumen:</strong> Alte Einträge erst löschen, wenn sie am PC eingelesen sind.</p>
+    </details>
   </section>
+  <div class="ansicht" id="ansicht" role="tablist">
+    <button data-ansicht="erfassen" role="tab">✏️ Erfassen</button>
+    <button data-ansicht="uebersicht" role="tab">📊 Übersicht</button>
+  </div>
   <div class="info" id="zaehler"></div>
   <div class="karten" id="karten"></div>
+  <div id="uebersicht"></div>
 </main>
 
 <div class="bogen-hg" id="bogen-hg"></div>
@@ -299,6 +329,14 @@ function zeichne() {
   $('listen-info').textContent = ids.length ? `${ids.length} Lerngruppe(n), eingelesen ${new Date(daten.eingelesen || Date.now()).toLocaleDateString('de-DE')}` : 'noch keine Liste';
   $('export-info').textContent = `${daten.eintraege.length} Einträge auf diesem iPad`;
   $('pw-status').textContent = gemerktesPasswort() ? 'Passwort ist auf diesem iPad gemerkt.' : 'Kein Passwort gemerkt — es wird beim Einlesen/Exportieren abgefragt.';
+  const ansicht = daten.ansicht === 'uebersicht' ? 'uebersicht' : 'erfassen';
+  document.querySelectorAll('#ansicht [data-ansicht]').forEach(b => b.classList.toggle('aktiv', b.dataset.ansicht === ansicht));
+  $('ansicht').style.display = lg ? '' : 'none';
+  $('karten').style.display = ansicht === 'erfassen' ? '' : 'none';
+  $('uebersicht').style.display = ansicht === 'uebersicht' ? '' : 'none';
+  $('schnell-knopf').style.display = ansicht === 'erfassen' ? '' : 'none';
+  $('datum').style.display = ansicht === 'erfassen' ? '' : 'none';
+  if (lg && ansicht === 'uebersicht') { $('zaehler').textContent = ''; zeichneUebersicht(lg); return; }
   if (!lg) {
     $('zaehler').textContent = '';
     $('karten').innerHTML = `<div class="leer" style="grid-column:1/-1;">Noch keine Klassenliste auf diesem iPad.<br>
@@ -312,6 +350,73 @@ function zeichne() {
     return `<button class="kachel ${e ? 'erfasst' : ''} ${offenSid === s.id ? 'aktiv' : ''}" data-sid="${esc(s.id)}">
       <span class="name">${esc(s.name)}</span><span class="wert">${e ? esc(label(e)) : 'antippen'}</span></button>`;
   }).join('');
+}
+
+/* ---------- Übersicht je Lerngruppe: Stand vom PC + Einträge dieses iPads ----------
+   Mündlich: PC-Einträge des laufenden Halbjahrs, darüber die iPad-Einträge (gleiches Datum → iPad-Wert,
+   als „neu" markiert, solange er nicht am PC ist). Ø wie am PC: keine aktive Beteiligung = 4,
+   fehlende Teilnahme zählt nicht. Schriftlich und Gesamtstand: Stand vom letzten PC-Export. */
+let offeneZeile = null;
+function pill(n, text) {
+  if (n == null) return `<span class="pill leer">${esc(text ?? '–')}</span>`;
+  const k = Math.max(1, Math.min(6, Math.round(n)));
+  return `<span class="pill n${k}">${esc(text ?? String(n))}</span>`;
+}
+function fmt(x, st = 1) { return x == null ? '–' : x.toFixed(st).replace('.', ','); }
+function muendlichListe(lg, s) {
+  const zr = lg.zeitraum || {};
+  const imZr = (d) => (!zr.von || d >= zr.von) && (!zr.bis || d <= zr.bis);
+  const map = new Map();
+  for (const e of s.noten?.muendlich || []) map.set(e.datum, { ...e, quelle: 'pc' });
+  for (const e of daten.eintraege.filter(x => x.lgId === lg.id && x.sId === s.id && imZr(x.datum))) {
+    const pc = map.get(e.datum);
+    const gleich = pc && pc.typ === e.typ && (pc.wert ?? null) === (e.wert ?? null) && (pc.notiz || '') === (e.notiz || '');
+    map.set(e.datum, { datum: e.datum, typ: e.typ, wert: e.wert, notiz: e.notiz, quelle: gleich ? 'pc' : 'ipad' });
+  }
+  return [...map.values()].sort((a, b) => b.datum.localeCompare(a.datum));
+}
+function muendlichSchnitt(liste) {
+  const w = liste.map(e => e.typ === 'kein_beitrag' ? 4 : e.typ === 'note' ? e.wert : null).filter(x => x != null && !isNaN(x));
+  return { avg: w.length ? w.reduce((a, c) => a + c, 0) / w.length : null, n: w.length,
+    keinBeitrag: liste.filter(e => e.typ === 'kein_beitrag').length, fehlt: liste.filter(e => e.typ === 'abwesend').length };
+}
+function zeichneUebersicht(lg) {
+  const hatNoten = lg.schueler.some(s => s.noten);
+  const zeigeStand = !!daten.zeigeStand;
+  const stand = daten.standVom ? new Date(daten.standVom).toLocaleDateString('de-DE') : '?';
+  const zeilen = lg.schueler.map(s => {
+    const liste = muendlichListe(lg, s);
+    const m = muendlichSchnitt(liste);
+    const n = s.noten || {};
+    const offen = offeneZeile === s.id;
+    const zt = (n.zt || []).map(x => x.nt ? `<span class="pill leer" title="${esc(x.name)}">${esc(x.b)}: nt</span>` : pill(x.note, `${x.b}: ${x.note}`)).join('') || '<span class="klein">–</span>';
+    const weitere = (n.weitere || []).map(x => x.na ? `<span class="pill n6" title="nicht abgegeben">${esc(x.art)} ${esc(x.b)}: n.a.</span>` : pill(x.note, `${x.art} ${x.b}: ${x.note ?? '–'}`)).join('') || '<span class="klein">–</span>';
+    const neu = liste.filter(e => e.quelle === 'ipad').length;
+    return `
+      <tr class="zeile ${offen ? 'offen' : ''}" data-sid="${esc(s.id)}">
+        <td><strong>${esc(s.name)}</strong></td>
+        <td>${zt}</td>
+        <td>${weitere}</td>
+        <td>${m.avg != null ? pill(m.avg, fmt(m.avg)) : pill(null)} <span class="klein">${m.n} ${m.n === 1 ? 'Eintrag' : 'Einträge'}${neu ? ` · ${neu} neu` : ''}</span></td>
+        ${zeigeStand ? `<td>${n.stand != null ? pill(n.stand, fmt(n.stand, 2)) : pill(null)}${n.zeugnis != null ? ` <span class="klein">Zeugnis ${n.zeugnis}</span>` : ''}</td>` : ''}
+      </tr>
+      ${offen ? `<tr class="detail"><td colspan="${zeigeStand ? 5 : 4}">
+        <div class="klein" style="margin-bottom:6px;">Mündliche Einträge im Halbjahr${m.keinBeitrag ? ` · ${m.keinBeitrag}× keine aktive Beteiligung` : ''}${m.fehlt ? ` · ${m.fehlt}× fehlt` : ''}</div>
+        ${liste.length ? `<ul>${liste.map(e => `<li>${new Date(e.datum + 'T12:00').toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })} · <strong>${esc(label({ ...e, notiz: '' }))}</strong>${e.notiz ? ` — <em>${esc(e.notiz)}</em>` : ''}${e.quelle === 'ipad' ? ' <span class="neu">neu (iPad)</span>' : ''}</li>`).join('')}</ul>` : '<span class="klein">Noch keine Einträge.</span>'}
+        ${(n.zt || []).length ? `<div class="klein" style="margin-top:8px;">Schriftlich: ${(n.zt || []).map(x => `${esc(x.b)} ${esc(x.name)}: ${x.nt ? 'nicht teilgenommen' : x.note}`).join(' · ')}</div>` : ''}
+      </td></tr>` : ''}`;
+  }).join('');
+  $('uebersicht').innerHTML = `
+    <div class="ueb-kopf">
+      <span><strong>${esc(lg.name)}</strong>${lg.halbjahr ? ` · Halbjahr ${lg.halbjahr}` : ''} · schriftliche Noten: Stand vom PC (${stand}) · mündlich inkl. Einträge dieses iPads</span>
+      ${hatNoten ? `<label><input type="checkbox" id="zeige-stand" ${zeigeStand ? 'checked' : ''}> Gesamtstand zeigen</label>` : ''}
+    </div>
+    ${hatNoten ? '' : `<div class="test" style="background:var(--accent-50); border-color:var(--accent);">Für die schriftlichen Noten die Klassenliste am PC neu exportieren und dabei „aktuellen Notenstand mitgeben" anhaken. Die mündlichen Einträge dieses iPads siehst du schon.</div>`}
+    <table class="ueb">
+      <thead><tr><th>Schüler:in</th><th>Schriftlich (ZT)</th><th>Lernplan / KoBo</th><th>Mündlich Ø</th>${zeigeStand ? '<th>Stand HJ</th>' : ''}</tr></thead>
+      <tbody>${zeilen}</tbody>
+    </table>
+    <p class="klein" style="color:var(--text-2); margin-top:8px;">Zeile antippen = mündliche Einträge mit Notizen. „Gesamtstand" ist der vorläufige Halbjahreswert vom PC (ohne die neuen iPad-Einträge) — nur für dich, Vorsicht bei Blicken aufs Display.</p>`;
 }
 
 function oeffne(sId) {
@@ -369,10 +474,16 @@ async function liesListe(text) {
   daten.reihenfolge = [];
   for (const lg of d.lerngruppen) {
     if (!lg || !lg.id || !Array.isArray(lg.schueler)) continue;
-    daten.listen[lg.id] = { id: lg.id, name: String(lg.name || 'Lerngruppe'), schueler: lg.schueler.filter(s => s && s.id).map(s => ({ id: String(s.id), name: String(s.name || '') })) };
+    daten.listen[lg.id] = {
+      id: lg.id, name: String(lg.name || 'Lerngruppe'), fach: lg.fach || '',
+      halbjahr: lg.halbjahr || null, zeitraum: lg.zeitraum || null,
+      schueler: lg.schueler.filter(s => s && s.id).map(s => ({ id: String(s.id), name: String(s.name || ''), noten: s.noten || null }))
+    };
     daten.reihenfolge.push(lg.id);
   }
   daten.eingelesen = new Date().toISOString();
+  daten.standVom = d.erstellt || daten.eingelesen;
+  daten.mitNoten = !!d.mitNoten;
   if (!daten.listen[daten.aktivLg]) daten.aktivLg = daten.reihenfolge[0] || null;
   speichern(); zeichne();
   meldung(`${daten.reihenfolge.length} Lerngruppe(n) eingelesen`);
@@ -444,6 +555,12 @@ $('eintrag-loeschen').addEventListener('click', () => {
 });
 $('reiter').addEventListener('click', e => { const b = e.target.closest('[data-lg]'); if (!b) return; daten.aktivLg = b.dataset.lg; speichern(); zeichne(); });
 $('schnell-knopf').addEventListener('click', schnellerfassung);
+$('ansicht').addEventListener('click', e => { const b = e.target.closest('[data-ansicht]'); if (!b) return; daten.ansicht = b.dataset.ansicht; speichern(); zeichne(); });
+$('uebersicht').addEventListener('click', e => {
+  if (e.target.id === 'zeige-stand') { daten.zeigeStand = e.target.checked; speichern(); zeichne(); return; }
+  const z = e.target.closest('tr.zeile'); if (!z) return;
+  offeneZeile = offeneZeile === z.dataset.sid ? null : z.dataset.sid; zeichne();
+});
 $('bogen-skip').addEventListener('click', () => {
   const n = nachbar(1, true);
   if (n && n !== offenSid) oeffne(n); else { meldung('Keine weiteren Schüler:innen ohne Eintrag.'); schliesse(); }
