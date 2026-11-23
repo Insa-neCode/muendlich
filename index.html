@@ -150,6 +150,10 @@
       <button class="btn" id="pw-vergessen">Gemerktes Passwort vergessen</button>
       <button class="btn danger" id="aufraeumen-knopf">Einträge älter als 60 Tage löschen</button>
     </div>
+    <div class="reihe">
+      <button class="btn" id="update-knopf">🔄 Auf neue Version prüfen</button>
+      <span class="menue-info" id="version-info"></span>
+    </div>
     <details class="technik">
       <summary>ℹ️ So funktioniert's · Technik &amp; Datenschutz</summary>
       <p><strong>Klassenliste:</strong> Am PC im Bewertungstool → Einstellungen &amp; Daten → „📱 Klassenliste fürs iPad exportieren", Lerngruppen auswählen. Datei über OneDrive/Teams aufs iPad holen und hier einlesen. Eine neue Liste ersetzt die alte, erfasste Einträge bleiben.</p>
@@ -584,8 +588,22 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && offenSid) 
 
 
 /* Offline nutzbar (nur über https bzw. localhost) */
+/* Programmversion (bei jeder Veröffentlichung hochzählen) — sichtbar unter ☰ Daten */
+const PROGRAMM_VERSION = '2026-11-23b';
+$('version-info').textContent = 'Version ' + PROGRAMM_VERSION;
+/* Neue Version holen: Service Worker aktualisieren, Cache leeren, neu laden. Die erfassten Daten bleiben
+   (sie liegen im Gerätespeicher, nicht im Cache). */
+$('update-knopf').addEventListener('click', async () => {
+  meldung('Suche neue Version …');
+  try {
+    const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+    if (reg) await reg.update();
+    if (window.caches) for (const k of await caches.keys()) await caches.delete(k);
+  } catch {}
+  location.reload();
+});
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 }
 zeichne();
 </script>
